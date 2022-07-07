@@ -1,6 +1,8 @@
 const express = require('express')
 const app = express()
 const cors = require('cors')
+require('dotenv').config()
+const Blog = require('./models/blog')
 
 const requestLogger = (request, response, next) => {
     console.log('Method:', request.method)
@@ -14,67 +16,6 @@ app.use(express.json())
 app.use(requestLogger)
 app.use(cors())
 app.use(express.static('build'))
-
-let blogs = [
-    {
-        author: "Ruus",
-        title: "Stud Book",
-        url: ".com",
-        likes: 5,
-        id: 0
-    },
-    {
-        author: "JB",
-        title: "Teh Life...",
-        url: ".org",
-        likes: 1,
-        id: 1
-    }
-]
-
-app.get('/api/blogs', (request, response) => {
-    response.json(blogs)
-})
-
-app.get('/api/blogs/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const blog = blogs.find(blog => blog.id === id)
-
-    if (blog) {
-        response.json(blog)
-    } else {
-        response.status(404).end()
-    }
-})
-
-app.get('/info', (request, response) => {
-    response.end(`The blog list has info for ${blogs.length} blogs. ${Date()}`)
-})
-
-app.put('/api/blogs/:id', (request, response, next) => {
-    const id = Number(request.params.id)
-    console.log('id inside of the put', id)
-
-    const blog = blogs.map(b => {
-        if (b.id === id) { b.likes++ }
-    })
-    response.json(blog)
-
-})
-
-app.delete('/api/blogs/:id', (request, response) => {
-    const id = Number(request.params.id)
-    blogs = blogs.filter(blog => blog.id !== id)
-
-    response.status(204).end()
-})
-
-const generateID = () => {
-    const maxId = blogs.length > 0
-        ? Math.max(...blogs.map(b => b.id))
-        : 0
-    return maxId + 1
-}
 
 app.post('/api/blogs', (request, response) => {
     const body = request.body
@@ -95,17 +36,62 @@ app.post('/api/blogs', (request, response) => {
         return response.status(400).json({ error: 'url missing' })
     }
 
-    const blog = {
-        author: body.author,
-        title: body.title,
-        url: body.url,
-        likes: body.likes,
-        id: generateID()
-    }
+    const blog = new Blog({
+        author: author,
+        title: title,
+        url: url,
+        likes: 0
+    })
 
-    blogs = blogs.concat(blog)
+    blog
+        .save()
+        .then(savedBlog => {
+            console.log({ savedBlog })
+            response.json(savedBlog)
+        })
+})
 
-    response.json(blog)
+app.get('/api/blogs', (request, response) => {
+    Blog
+        .find({})
+        .then(blogs => {
+            response.json(blogs)
+        })
+})
+
+app.get('/api/blogs/:id', (request, response) => {
+    Blog
+        .findById(request.params.id)
+        .then(blog => {
+            response.json(blog)
+        })
+})
+
+app.get('/info', (request, response) => {
+    response.end(`The blog list has info for ${blogs.length} blogs. ${Date()}`)
+})
+
+app.put('/api/blogs/:id', (request, response, next) => {
+    const id = request.params.id
+    const likes = request.body.likes
+
+    const newBlog = { likes: likes }
+
+    Blog
+        .findByIdAndUpdate(id, newBlog, { new: true, runValidators: true, context: 'query' })
+        .then(updatedBlog => {
+            response.json(updatedBlog)
+        })
+        .catch(error => next(error))
+})
+
+app.delete('/api/blogs/:id', (request, response) => {
+    Blog
+        .findByIdAndDelete(request.params.id)
+        .then(result => {
+            response.status(204).end()
+        })
+        .catch(error => next(error))
 })
 
 const unknownEndpoint = (request, response) => {
@@ -114,7 +100,7 @@ const unknownEndpoint = (request, response) => {
 app.use(unknownEndpoint)
 
 const errorHandler = (error, request, response, next) => {
-    console.error(error.message)
+    console.error("error:", error.message)
 
     if (error.name === 'CastError') {
         return response.status(404).send({ error: 'malformed id' })
@@ -124,6 +110,7 @@ const errorHandler = (error, request, response, next) => {
 
     next(error)
 }
+
 app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
