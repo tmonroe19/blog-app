@@ -68,7 +68,7 @@ app.get('/api/blogs/:id', (request, response) => {
 })
 
 app.get('/info', (request, response) => {
-    response.end(`The blog list has info for ${blogs.length} blogs. ${Date()}`)
+    response.end(`The blog list has info for ${Blog.length} blogs. ${Date()}`)
 })
 
 app.put('/api/blogs/:id', (request, response, next) => {
